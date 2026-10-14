@@ -4,9 +4,11 @@ import dev.hexanilix.refsql.table.TableColumn;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 public class Upsert {
 
-    public static <CT extends TableColumn> @NotNull String buildUpsertQuery(@NotNull BaseTableSchema<CT> schema) {
+    public static <TC extends TableColumn> @NotNull String buildUpsertQuery(@NotNull BaseTableSchema<TC> schema) {
         StringBuilder upsert = new StringBuilder("INSERT INTO \"" + schema.getName() + "\" (");
 
         boolean comma = false;
@@ -27,12 +29,22 @@ public class Upsert {
 
         upsert.append(')');
 
-        if (schema.hasPrimaryKey()) {
-            upsert.append(" ON CONFLICT (").append(schema.getPrimaryKey().getName()).append(") DO UPDATE SET ");
+        List<TC> primaryKeys = schema.getPrimaryKeys();
+        if (primaryKeys != null) {
+            upsert.append(" ON CONFLICT (");
 
             comma = false;
-            for (TableColumn column : schema.getColumnMap().values()) {
-                if (column == schema.getPrimaryKey()) continue;
+            for (TC c : primaryKeys) {
+                if (comma) upsert.append(", ");
+                upsert.append(c.getName());
+                comma = true;
+            }
+            upsert.append(") DO UPDATE SET ");
+
+            comma = false;
+            for (TC column : schema.getColumnMap().values()) {
+                if (primaryKeys.contains(column)) continue;
+
                 if (comma) upsert.append(", ");
                 upsert.append(column.getName()).append('=').append("EXCLUDED.").append(column.getName());
                 comma = true;
@@ -41,5 +53,4 @@ public class Upsert {
 
         return upsert.append(';').toString();
     }
-
 }

@@ -1,9 +1,12 @@
 package dev.hexanilix.refsql.repo;
 
 import dev.hexanilix.refsql.ClassSqlRelationDefinition;
+import dev.hexanilix.refsql.TypeRelationManager;
 import dev.hexanilix.refsql.queries.Upsert;
 import dev.hexanilix.refsql.table.FieldTableColumn;
+import dev.hexanilix.refsql.table.TableColumn;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
+import dev.hexanilix.util.StringUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
@@ -34,9 +37,16 @@ public class ClassTableRepository<T> {
         this.select_all_query = "SELECT * FROM " + schema.getName();
         this.upsert_query = Upsert.buildUpsertQuery(schema);
 
-        this.get_by_primary_key_query = schema.hasPrimaryKey()
-                ? "SELECT * FROM " + schema.getName() + " WHERE " + schema.getPrimaryKey().getName() + "=?"
-                : null;
+        if (schema.hasPrimaryKey()) {
+            StringBuilder sb = new StringBuilder("SELECT * FROM " + schema.getName() + " WHERE ");
+            boolean next = false;
+            for (FieldTableColumn key : schema.getPrimaryKeys()) {
+                if (next) sb.append(" AND ");
+                sb.append(key.getName()).append(" = ?");
+                next = true;
+            }
+            this.get_by_primary_key_query = sb.toString();
+        } else this.get_by_primary_key_query = null;
     }
 
     public void ensureTableExists() {
@@ -114,15 +124,42 @@ public class ClassTableRepository<T> {
         }
     }
 
-    public Optional<T> getByPrimaryKey(Object... primary_keys) throws SQLException {
+    private <Obj> Object convert(Obj obj) {
+        TypeRelationManager mgr = schema.getTypeRelationManager();
+        if (mgr != null) {
+            ClassSqlRelationDefinition<Obj> conv = (ClassSqlRelationDefinition<Obj>) mgr.get(obj.getClass());
+            if (conv != null) {
+                return conv.convertToSql(obj);
+            }
+        }
+        return obj;
+    }
+
+    public Optional<T> getByPrimaryKey(Object... keys) throws SQLException {
         // TODO: Add support for multiple primary keys
-        if (schema.getPrimaryKey() == null)
+        ArrayList<FieldTableColumn> pk_collumns = schema.getPrimaryKeys();
+        if (pk_collumns == null)
             throw new IllegalStateException("Schema has no primary key(s), therefore requesting an entity by the primary key(s) is impossible");
 
-        int i = 1;
+        if (keys.length != pk_collumns.size())
+            throw new IllegalArgumentException("Number of provided primary keys does not match number of primary keys in the schema");
+
+        int i = 0;
         try (PreparedStatement s = db.prepareStatement(get_by_primary_key_query)) {
-            for (Object primary_key : primary_keys)
-                s.setObject(i++, primary_key);
+            for (Object key : keys) {
+                if (key == null)
+                    throw new IllegalStateException("Primary key is null");
+
+                Object value = convert(key);
+                FieldTableColumn column = pk_collumns.get(i);
+
+                if (value == null || TableColumn.SqlType.from(value.getClass()) != column.getSqlType()) {
+                    throw new IllegalArgumentException(
+                            "Primary key value is incompatible with column "
+                                    + column.toColumnSql());
+                }
+                s.setObject(++i, value);
+            }
 
             ResultSet set = s.executeQuery();
             if (set.next()) return Optional.of(schema.getConvertingFunction().apply(set));

@@ -1,5 +1,7 @@
 package dev.hexanilix.refsql.table.schema;
 
+import dev.hexanilix.Pair;
+import dev.hexanilix.buffers.crono.ChronoTest;
 import dev.hexanilix.refsql.ConvertingFunction;
 import dev.hexanilix.refsql.TypeRelationManager;
 import dev.hexanilix.refsql.table.FieldTableColumn;
@@ -9,24 +11,25 @@ import dev.hexanilix.refsql.table.schema.middleware.RecordClassConverter;
 import dev.hexanilix.refsql.table.schema.middleware.DefaultClassConvertingFunction;
 import dev.hexanilix.text.style.Cases;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.*;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
 
-    private final Class<T> clazz;
-    private ConvertingFunction<T> convertToTFromRs;
-    public ClassTableSchema(@NotNull Class<T> clazz) {
-        this(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz);
-    }
-    public ClassTableSchema(@NotNull Class<T> clazz, TypeRelationManager type_relation_manager) {
-        this(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, type_relation_manager);
-    }
-    public ClassTableSchema(String name, @NotNull Class<T> clazz) { this(name, clazz, null); }
-    public ClassTableSchema(String name, @NotNull Class<T> clazz, TypeRelationManager type_relation_manager) {
-        super(name, type_relation_manager);
-        this.clazz = clazz;
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz)
+    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, null); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz, TypeRelationManager type_relation_manager)
+    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, type_relation_manager); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz)
+    { return of(name, clazz, null); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz, TypeRelationManager type_relation_manager) {
+        List<FieldTableColumn> columns = new ArrayList<>();
+        List<FieldTableColumn> primary_keys = null;
+
         Field[] fields  = clazz.getDeclaredFields();
         for (Field field : fields) {
             if ((field.getModifiers() & Modifier.STATIC) != 0) continue;
@@ -34,16 +37,28 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
             if ((field.getModifiers() & Modifier.TRANSIENT) != 0) continue;
 
             FieldTableColumn c = FieldTableColumn.columnFrom(field, type_relation_manager);
-            this.columns.put(c.getName(), c);
+            columns.add(c);
             if (field.isAnnotationPresent(PrimaryKey.class)) {
-                if (this.primary_key == null)
-                    this.primary_key = c;
-                else
-                    throw new IllegalStateException("Primary key already exists in table " + this.name + ": " + this.primary_key);
+                if (primary_keys == null) primary_keys = new ArrayList<>();
+                primary_keys.add(c);
             }
         }
+
+        return new ClassTableSchema<>(clazz, name, type_relation_manager, columns, primary_keys);
     }
 
+    private final Class<T> clazz;
+    private ConvertingFunction<T> convertToTFromRs;
+
+    private ClassTableSchema(
+            Class<T> clazz,
+            @NotNull String name,
+            @Nullable TypeRelationManager type_relation_manager,
+            @NotNull List<FieldTableColumn> columns,
+            @Nullable List<FieldTableColumn> primary_keys) {
+        super(name, type_relation_manager, columns, primary_keys);
+        this.clazz = clazz;
+    }
 
     public ConvertingFunction<T> getConvertingFunction() {
         return convertToTFromRs == null ? (convertToTFromRs = buildConvertingFunction(this)) :  convertToTFromRs;
