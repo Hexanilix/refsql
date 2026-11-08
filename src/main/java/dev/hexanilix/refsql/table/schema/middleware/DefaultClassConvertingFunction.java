@@ -10,6 +10,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import static dev.hexanilix.refsql.table.schema.ClassTableSchema.getAllFields;
+
 public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> {
 
     private record ColumnReadePair(FieldTableColumn column, ColumnReader reader) {};
@@ -23,7 +25,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
-        map = new ColumnReadePair[clazz.getDeclaredFields().length];
+        map = new ColumnReadePair[getAllFields(clazz).size()];
 
         int i = 0;
         for (FieldTableColumn c : schema.getColumns()) {

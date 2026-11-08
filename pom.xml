@@ -6,7 +6,7 @@
 
     <groupId>dev.hexanilix</groupId>
     <artifactId>refsql</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -24,6 +24,13 @@
             <groupId>dev.hexanilix</groupId>
             <artifactId>jgl-17</artifactId>
             <version>0.0.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.14</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

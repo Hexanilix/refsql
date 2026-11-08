@@ -1,6 +1,7 @@
 package dev.hexanilix.refsql.table;
 
 import dev.hexanilix.refsql.ClassSqlRelationDefinition;
+import dev.hexanilix.refsql.SqlType;
 import dev.hexanilix.refsql.TypeRelationManager;
 import dev.hexanilix.refsql.table.annotations.Column;
 import dev.hexanilix.text.style.Cases;

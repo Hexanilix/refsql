@@ -1,24 +1,31 @@
 package dev.hexanilix.refsql.table.schema;
 
-import dev.hexanilix.Pair;
-import dev.hexanilix.buffers.crono.ChronoTest;
 import dev.hexanilix.refsql.ConvertingFunction;
 import dev.hexanilix.refsql.TypeRelationManager;
-import dev.hexanilix.refsql.table.FieldTableColumn;
 import dev.hexanilix.refsql.repo.ClassTableRepository;
+import dev.hexanilix.refsql.table.FieldTableColumn;
 import dev.hexanilix.refsql.table.annotations.PrimaryKey;
-import dev.hexanilix.refsql.table.schema.middleware.RecordClassConverter;
 import dev.hexanilix.refsql.table.schema.middleware.DefaultClassConvertingFunction;
+import dev.hexanilix.refsql.table.schema.middleware.RecordClassConverter;
 import dev.hexanilix.text.style.Cases;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
+
+    public static @NotNull List<Field> getAllFields(@NotNull Class<?> clazz) {
+        List<Field> fields = new ArrayList<>();
+        Collections.addAll(fields, clazz.getFields());
+        Collections.addAll(fields, clazz.getDeclaredFields());
+        return fields;
+    }
 
     public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz)
     { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, null); }
@@ -30,8 +37,7 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
         List<FieldTableColumn> columns = new ArrayList<>();
         List<FieldTableColumn> primary_keys = null;
 
-        Field[] fields  = clazz.getDeclaredFields();
-        for (Field field : fields) {
+        for (Field field : getAllFields(clazz)) {
             if ((field.getModifiers() & Modifier.STATIC) != 0) continue;
             if (!clazz.isRecord() && (field.getModifiers() & Modifier.FINAL) != 0) continue;
             if ((field.getModifiers() & Modifier.TRANSIENT) != 0) continue;

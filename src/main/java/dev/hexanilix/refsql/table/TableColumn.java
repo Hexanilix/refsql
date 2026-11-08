@@ -1,12 +1,9 @@
 package dev.hexanilix.refsql.table;
 
+import dev.hexanilix.refsql.SqlType;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.security.Timestamp;
-import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 
 public class TableColumn {
 
@@ -29,60 +26,11 @@ public class TableColumn {
         }
     }
 
-    public enum SqlType {
-        TEXT(String.class),
-        INT(Integer.class),
-        BIGINT(Long.class),
-        BOOL(Boolean.class),
-        UUID(UUID.class),
-        TIMESTAMP(Timestamp.class, Instant.class);
-
-        public static @Nullable SqlType from(@NotNull Class<?> clazz) { return from(clazz, null); }
-        public static @Nullable SqlType from(@NotNull Class<?> clazz, SqlType def) {
-            if (clazz.isEnum()) return SqlType.TEXT;
-            if (clazz == int.class) return SqlType.INT;
-            if (clazz == long.class) return SqlType.BIGINT;
-            if (clazz == boolean.class) return SqlType.BOOL;
-
-            for (SqlType sqlType : SqlType.values())
-                for (Class<?> alias : sqlType.aliases)
-                    if (alias.equals(clazz))
-                        return sqlType;
-            return def;
-        }
-
-        private final String sql_value;
-        private final Class<?>[] aliases;
-        SqlType(String sql_value, Class<?>... aliases) {
-            this.sql_value = sql_value;
-            if (aliases == null)
-                throw new IllegalArgumentException("Aliases must contain at least one object");
-            this.aliases = aliases;
-        }
-        SqlType(Class<?>... aliases) {
-            this.sql_value = this.name();
-            if (aliases == null)
-                throw new IllegalArgumentException("Aliases must contain at least one object");
-            this.aliases = aliases;
-        }
-
-        public String getSqlValue() {
-            return sql_value;
-        }
-
-        public Class<?>[] getAliases() {
-            return aliases;
-        }
-        public Class<?> getMainAlias() {
-            return aliases[0];
-        }
-    }
-
     private String name;
     private SqlType type;
 
     private Modifiers modifiers;
-    private Optional<String> default_value = Optional.empty();
+    private @NotNull Optional<String> default_value = Optional.empty();
 
     public TableColumn(@NotNull String name, SqlType type, Modifiers modifiers) throws IllegalArgumentException {
         if (type == null)

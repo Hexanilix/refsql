@@ -39,8 +39,8 @@ public class BaseTableSchema<TC extends TableColumn> {
     }
 
     protected final String name;
-    protected final HashMap<String, TC> columns = new HashMap<>();
-    protected final ArrayList<TC> primary_keys;
+    protected final List<TC> columns;
+    protected final List<TC> primary_keys;
     private final TypeRelationManager type_relation_manager;
     public BaseTableSchema(
             @NotNull String name,
@@ -51,14 +51,16 @@ public class BaseTableSchema<TC extends TableColumn> {
         this.name = name;
         this.type_relation_manager = type_relation_manager;
 
+        List<TC> temp = new ArrayList<>();
         for (TC column : columns) {
             Objects.requireNonNull(column, "Column cannot be null");
 
-            if (this.columns.putIfAbsent(column.getName(), column) != null) {
+            if (temp.contains(column))
                 throw new IllegalArgumentException(
                         "Duplicate column: " + column.getName());
-            }
+            temp.add(column);
         }
+        this.columns = Collections.unmodifiableList(temp);
 
         if (primary_keys != null) {
             if (primary_keys.isEmpty())
@@ -67,13 +69,13 @@ public class BaseTableSchema<TC extends TableColumn> {
             for (TC key : keys) {
                 Objects.requireNonNull(key, "Primary key column cannot be null");
 
-                if (!this.columns.containsKey(key.getName())) {
+                if (!this.columns.contains(key)) {
                     throw new IllegalArgumentException(
                             "Primary key column must exist among provided columns: "
                                     + key.getName());
                 }
             }
-            this.primary_keys = keys;
+            this.primary_keys = Collections.unmodifiableList(keys);
         } else this.primary_keys = null;
     }
 
@@ -88,23 +90,22 @@ public class BaseTableSchema<TC extends TableColumn> {
         return name;
     }
 
-    public Map<String, TC> getColumnMap() {
+    public List<TC> getColumns() {
         return columns;
     }
 
-    public Collection<TC> getColumns() {
-        return columns.values();
-    }
-
-    public TableColumn getColumn(String name) {
-        return columns.get(name);
+    public @Nullable TC getColumn(String name) {
+        for (TC column : columns)
+            if (column.getName().equals(name))
+                return column;
+        return null;
     }
 
     public boolean hasPrimaryKey() {
         return primary_keys != null;
     }
 
-    public @Nullable ArrayList<TC> getPrimaryKeys() {
+    public @Nullable List<TC> getPrimaryKeys() {
         return primary_keys;
     }
 
@@ -134,9 +135,7 @@ public class BaseTableSchema<TC extends TableColumn> {
         StringBuilder sb = new StringBuilder();
 
         boolean comma = false;
-        for (Map.Entry<String, TC> entry : columns.entrySet()) {
-            TC column = entry.getValue();
-
+        for (TC column : columns) {
             if (comma) sb.append(", ");
             sb.append(column.toColumnSql(primary_keys != null && primary_keys.contains(column)));
             comma = true;

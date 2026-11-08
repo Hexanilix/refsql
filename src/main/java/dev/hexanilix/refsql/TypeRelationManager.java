@@ -1,5 +1,7 @@
 package dev.hexanilix.refsql;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,6 +15,11 @@ public class TypeRelationManager {
 
     public <T> ClassSqlRelationDefinition<T> get(Class<T> clazz) {
         return (ClassSqlRelationDefinition<T>) this.type_relation_definitions.get(clazz);
+    }
+
+    public  <Obj> Object convert(@NotNull Obj obj) {
+        ClassSqlRelationDefinition<Obj> conv = (ClassSqlRelationDefinition<Obj>) get(obj.getClass());
+        return conv != null ? conv.convertToSql(obj) : obj;
     }
 
 }
