@@ -168,7 +168,7 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
                             "Primary key " + param + " value is null"
                     );
 
-                TableColumn column = pk_columns.get(param);
+                TableColumn column = pk_columns.get(param - 1);
 
                 if (SqlType.from(value.getClass()) != column.getSqlType()) {
                     throw new IllegalArgumentException(
