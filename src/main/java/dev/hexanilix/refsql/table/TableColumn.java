@@ -74,7 +74,7 @@ public class TableColumn {
     public String toColumnSql(boolean is_primary_key) {
         return name + " " + type.getSqlValue() + " "
                 + modifiers.toString(is_primary_key || modifiers.isNotNull())
-                + default_value.map(s -> " DEFAULT " + s).orElse("");
+                + default_value.map(s -> " DEFAULT " + SqlType.wrapRawValueForQuery(s)).orElse("");
     }
 
     @Override

@@ -48,14 +48,18 @@ public class FieldTableColumn extends TableColumn {
     }
 
 
+    public static @NotNull String toColumnName(String name) {
+        return Cases.Camel.lower(name);
+    }
+
     private final Field field;
     public FieldTableColumn(@NotNull Field field, Modifiers modifiers) throws IllegalArgumentException {
-        super(Cases.Camel.lower(field.getName()), field.getType(), modifiers);
+        super(toColumnName(field.getName()), field.getType(), modifiers);
         this.field = field;
     }
 
     public FieldTableColumn(@NotNull Field field, @NotNull SqlType type, Modifiers modifiers) {
-        super(Cases.Camel.lower(field.getName()), type, modifiers);
+        super(toColumnName(field.getName()), type, modifiers);
         this.field = field;
     }
 

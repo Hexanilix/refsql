@@ -10,26 +10,28 @@ import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import static dev.hexanilix.refsql.table.schema.ClassTableSchema.getAllFields;
-
 public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> {
 
-    private record ColumnReadePair(FieldTableColumn column, ColumnReader reader) {};
+    private record ColumnReadPair(FieldTableColumn column, ColumnReader reader) {};
 
-    private final ColumnReadePair[] map;
+    private final ColumnReadPair[] map;
     private final Constructor<T> constructor;
     public DefaultClassConvertingFunction(@NotNull ClassTableSchema<T> schema) {
         Class<T> clazz = schema.getEntityClass();
-        try {
-            constructor = clazz.getConstructor();
-        } catch (NoSuchMethodException e) {
-            throw new RuntimeException(e);
+        try { constructor = clazz.getConstructor(); }
+        catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException(
+                    "Class " + clazz.getName()
+                            + " does not have an accessible public no-argument constructor. "
+                            + "Provide one or define a custom conversion function for this class.",
+                    e
+            );
         }
-        map = new ColumnReadePair[getAllFields(clazz).size()];
+        map = new ColumnReadPair[schema.getColumns().size()];
 
         int i = 0;
         for (FieldTableColumn c : schema.getColumns()) {
-            map[i++] = new ColumnReadePair(
+            map[i++] = new ColumnReadPair(
                     c,
                     ColumnReader.createFor(
                             c.getName(),
@@ -44,7 +46,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
     public T apply(ResultSet rs) throws SQLException {
         try {
             T t = constructor.newInstance();
-            for (ColumnReadePair p : map)
+            for (ColumnReadPair p : map)
                 p.column.getField().set(t, p.reader.read(rs));
             return t;
         } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {

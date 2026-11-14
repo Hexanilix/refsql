@@ -28,12 +28,27 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
     }
 
     public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz)
-    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, null); }
+    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, (TypeRelationManager) null); }
     public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz, TypeRelationManager type_relation_manager)
     { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, type_relation_manager); }
     public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz)
-    { return of(name, clazz, null); }
-    public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz, TypeRelationManager type_relation_manager) {
+    { return of(name, clazz, (TypeRelationManager) null); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz, TypeRelationManager type_relation_manager)
+    { return of(name, clazz, type_relation_manager, null); }
+
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz, ConvertingFunction<T> func)
+    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, func); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull Class<T> clazz, TypeRelationManager type_relation_manager, ConvertingFunction<T> func)
+    { return of(Cases.Camel.lower(clazz.getSimpleName()) + "s", clazz, type_relation_manager, func); }
+    public static <T> @NotNull ClassTableSchema<T> of(@NotNull String name, @NotNull Class<T> clazz, ConvertingFunction<T> func)
+    { return of(name, clazz, null, func); }
+
+    public static <T> @NotNull ClassTableSchema<T> of(
+            @NotNull String name,
+            @NotNull Class<T> clazz,
+            TypeRelationManager type_relation_manager,
+            ConvertingFunction<T> func
+    ) {
         List<FieldTableColumn> columns = new ArrayList<>();
         List<FieldTableColumn> primary_keys = null;
 
@@ -50,29 +65,27 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
             }
         }
 
-        return new ClassTableSchema<>(clazz, name, type_relation_manager, columns, primary_keys);
+        return new ClassTableSchema<>(clazz, name, type_relation_manager, columns, primary_keys, func);
     }
 
     private final Class<T> clazz;
-    private ConvertingFunction<T> convertToTFromRs;
+    private ConvertingFunction<T> converting_function;
 
     private ClassTableSchema(
             Class<T> clazz,
             @NotNull String name,
             @Nullable TypeRelationManager type_relation_manager,
             @NotNull List<FieldTableColumn> columns,
-            @Nullable List<FieldTableColumn> primary_keys) {
+            @Nullable List<FieldTableColumn> primary_keys,
+            @Nullable ConvertingFunction<T> func
+    ) {
         super(name, type_relation_manager, columns, primary_keys);
         this.clazz = clazz;
+        this.converting_function = func;
     }
 
-    public ConvertingFunction<T> getConvertingFunction() {
-        return convertToTFromRs == null ? (convertToTFromRs = buildConvertingFunction(this)) :  convertToTFromRs;
-    }
-
-    public void initializeConvertingFunction() {
-        if (convertToTFromRs == null)
-            convertToTFromRs = buildConvertingFunction(this);
+    public @NotNull ConvertingFunction<T> getConvertingFunction() {
+        return converting_function != null ? converting_function : (this.converting_function = buildConvertingFunction(this));
     }
 
     public static <T> @NotNull ConvertingFunction<T> buildConvertingFunction(@NotNull ClassTableSchema<T> schema) {
@@ -83,7 +96,7 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
     }
 
     public void setConvertingFunction(ConvertingFunction<T> func) {
-        this.convertToTFromRs = func;
+        this.converting_function = func;
     }
 
     public ClassTableRepository<T> getRepository(Connection db) {
