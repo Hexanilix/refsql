@@ -1,16 +1,15 @@
 package dev.hexanilix.refsql;
 
-import dev.hexanilix.refsql.table.schema.middleware.ResultSetColumnMetadata;
+import dev.hexanilix.refsql.table.schema.middleware.ResultSetMap;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Map;
 
 @FunctionalInterface
 public interface SimpleConvertingFunction<T> extends ConvertingFunction<T> {
 
     @Override
-    default T apply(ResultSet resultSet, Map<String, ResultSetColumnMetadata> meta) throws SQLException {
+    default T apply(ResultSet resultSet, ResultSetMap map) throws SQLException {
         return apply(resultSet);
     }
 

@@ -182,7 +182,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
     }
 
     @Override
-    public T apply(ResultSet rs, Map<String, ResultSetColumnMetadata> metas) throws SQLException {
+    public T apply(ResultSet rs, ResultSetMap map) throws SQLException {
         try {
             Object[] values = new Object[mappings.length];
             
@@ -191,13 +191,13 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
                 TableColumn column = mapping.column();
                 String name = column.getName();
 
-                ResultSetColumnMetadata meta = metas.get(name);
+                ResultSetColumnMetadata meta = metas.get(name, schema.getName());
                 if (meta != null) {
                     values[i] = mapping.reader().read(rs, meta);
                 } else if (column.hasDefaultValue()) {
-                    values[i] = DefaultClassConvertingFunction.getDefaultValueOnNotPresent(column, mapping.clazz());
+                    values[i] = DefaultClassConvertingFunction.getDefaultValueOnNotPresent(column, mapping.clazz(), schema);
                 } else throw new MissingColumnInResultSetException(
-                    "Column " + name + " was not found in the result set. Attempted to compensate with default value, but one wasn't defined for this column"
+                    "Column " + name + " of " + schema.getName() + " was not found in the result set. Attempted to compensate with default value, but one wasn't defined for this column"
                 );
             }
 

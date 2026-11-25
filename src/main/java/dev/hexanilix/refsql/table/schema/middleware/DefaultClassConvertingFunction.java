@@ -2,6 +2,7 @@ package dev.hexanilix.refsql.table.schema.middleware;
 
 import dev.hexanilix.refsql.ConvertingFunction;
 import dev.hexanilix.refsql.exceptions.MissingColumnInResultSetException;
+import dev.hexanilix.refsql.table.schema.BaseTableSchema;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.column.TableColumn;
@@ -13,13 +14,14 @@ import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Map;
 
 public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> {
 
+    private final ClassTableSchema<T> schema;
     private final ColumnMapping<FieldTableColumn>[] readers;
     private final Constructor<T> constructor;
     public DefaultClassConvertingFunction(@NotNull ClassTableSchema<T> schema) {
+        this.schema = schema;
         Class<T> clazz = schema.getEntityClass();
         try {
             constructor = clazz.getDeclaredConstructor();
@@ -78,10 +80,10 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
         return clazz;
     }
 
-    public static Object getDefaultValueOnNotPresent(@NotNull TableColumn column, Class<?> clazz) throws MissingColumnInResultSetException, IllegalStateException {
+    public static Object getDefaultValueOnNotPresent(@NotNull TableColumn column, Class<?> clazz, BaseTableSchema<?> schema) throws MissingColumnInResultSetException, IllegalStateException {
         if (column instanceof FieldTableColumn ftc && !ftc.allowsNotPresent()) {
             throw new MissingColumnInResultSetException(
-                    "Column '" + column.getName() + "' was not found in the result set"
+                    "Column '" + column.getName() + " of " + schema.getName() + "' was not found in the result set"
             );
         }
 
@@ -102,7 +104,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
     }
 
     @Override
-    public T apply(@NotNull ResultSet rs, Map<String, ResultSetColumnMetadata> metas) throws SQLException {
+    public T apply(@NotNull ResultSet rs, ResultSetMap map) throws SQLException {
         try {
             T t = constructor.newInstance();
 
@@ -110,12 +112,12 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
                 FieldTableColumn column = mapping.column();
                 String name = column.getName();
 
-                ResultSetColumnMetadata meta = metas.get(name);
+                ResultSetColumnMetadata meta = metas.get(name, schema.getName());
 
                 if (meta != null) {
                     column.getField().set(t, mapping.reader().read(rs, meta));
                 } else if (column.hasDefaultValue()) {
-                    column.getField().set(t, getDefaultValueOnNotPresent(column, mapping.clazz()));
+                    column.getField().set(t, getDefaultValueOnNotPresent(column, mapping.clazz(), schema));
                 }
             }
 
