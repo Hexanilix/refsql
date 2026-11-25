@@ -191,7 +191,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
                 TableColumn column = mapping.column();
                 String name = column.getName();
 
-                ResultSetColumnMetadata meta = metas.get(name, schema.getName());
+                ResultSetColumnMetadata meta = map.get(name, schema.getName());
                 if (meta != null) {
                     values[i] = mapping.reader().read(rs, meta);
                 } else if (column.hasDefaultValue()) {

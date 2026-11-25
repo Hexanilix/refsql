@@ -19,7 +19,7 @@ public interface ConvertingFunction<T> {
         ArrayList<T> list = new ArrayList<>();
 
         while (resultSet.next())
-            list.add(apply(resultSet, meta));
+            list.add(apply(resultSet, map));
         return list;
     }
     default List<T> applyToList(@NotNull ResultSet resultSet) throws SQLException {
@@ -27,7 +27,7 @@ public interface ConvertingFunction<T> {
 
         ResultSetMap map = new ResultSetMap(resultSet);
         while (resultSet.next())
-            list.add(apply(resultSet, meta));
+            list.add(apply(resultSet, map));
         return list;
     }
 

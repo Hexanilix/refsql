@@ -71,7 +71,7 @@ public class RecordClassConverter<T extends Record> implements ConvertingFunctio
                 FieldTableColumn column = mapping.column();
                 String name = mapping.column().getName();
 
-                ResultSetColumnMetadata meta = metas.get(name, schema.getName());
+                ResultSetColumnMetadata meta = map.get(name, schema.getName());
                 if (meta != null) {
                     values[i] = mapping.reader().read(rs, meta);
                 } else if (column.hasDefaultValue()) {

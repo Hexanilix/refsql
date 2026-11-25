@@ -112,7 +112,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
                 FieldTableColumn column = mapping.column();
                 String name = column.getName();
 
-                ResultSetColumnMetadata meta = metas.get(name, schema.getName());
+                ResultSetColumnMetadata meta = map.get(name, schema.getName());
 
                 if (meta != null) {
                     column.getField().set(t, mapping.reader().read(rs, meta));
