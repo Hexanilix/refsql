@@ -37,7 +37,9 @@ public class SqlQueryBuilder {
     @Contract(value = " -> new", pure = true)
     public static @NotNull SqlQueryBuilder n() { return new SqlQueryBuilder(); }
 
-    public SqlQueryBuilder where(String column) { return where(column, "?"); }
+    public SqlQueryBuilder where(String expression) { this.where.add(expression); return this; }
+
+    public SqlQueryBuilder whereP(String column) { return where(column, "?"); }
     public SqlQueryBuilder where(String column, String value) {
         this.where.add(column + " = " + value);
         return this;
@@ -89,8 +91,8 @@ public class SqlQueryBuilder {
     public static void main(String[] args) {
         System.out.println(
                 SqlQueryBuilder.n()
-                    .where("character_id")
-                    .where("pose_id")
+                    .whereP("character_id")
+                    .whereP("pose_id")
                     .orderBy("created_at DESC")
                     .orderBy("id DESC")
                     .offset(20)

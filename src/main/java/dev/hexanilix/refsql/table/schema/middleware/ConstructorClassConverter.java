@@ -19,7 +19,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
@@ -179,35 +182,20 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
     }
 
     @Override
-    public T apply(ResultSet rs) throws SQLException {
+    public T apply(ResultSet rs, Map<String, ResultSetColumnMetadata> metas) throws SQLException {
         try {
             Object[] values = new Object[mappings.length];
-            Set<String> columnNames = ColumnReader.getColumns(rs);
             
             for (int i = 0; i < mappings.length; i++) {
                 ColumnMapping<?> mapping = mappings[i];
                 TableColumn column = mapping.column();
                 String name = column.getName();
 
-                if (columnNames.contains(name)) {
-                    values[i] = mapping.reader().read(rs);
-                } else if (mapping.column() instanceof FieldTableColumn ftc && !ftc.allowsNotPresent()) {
-                    throw new MissingColumnInResultSetException(
-                            "Column " + name + " was not found in the result set"
-                    );
+                ResultSetColumnMetadata meta = metas.get(name);
+                if (meta != null) {
+                    values[i] = mapping.reader().read(rs, meta);
                 } else if (column.hasDefaultValue()) {
-                    Object value = column.getDefaultValue().getValue();
-
-                    if (value != null && !mapping.clazz().isInstance(value)) {
-                        throw new IllegalStateException(
-                                "Default value provider for column " + name
-                                        + " returned an incompatible type. Expected "
-                                        + mapping.clazz().getName()
-                                        + " but got " + value.getClass().getName()
-                        );
-                    }
-
-                    values[i] = value;
+                    values[i] = DefaultClassConvertingFunction.getDefaultValueOnNotPresent(column, mapping.clazz());
                 } else throw new MissingColumnInResultSetException(
                     "Column " + name + " was not found in the result set. Attempted to compensate with default value, but one wasn't defined for this column"
                 );

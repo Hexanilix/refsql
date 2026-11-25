@@ -121,8 +121,14 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
                 ColumnDefaultSupplier sup = m.getAnnotation(ColumnDefaultSupplier.class);
                 if (sup != null) {
                     if ((m.getModifiers() & Modifier.STATIC) == 0)
-                        throw new IllegalArgumentException("@ColumnDefaultSupplier function " + m + " must be static");
-                    default_suppliers.put(sup.field(), m);
+                        throw new IllegalArgumentException("@ColumnDefaultSupplier function " + m
+                                + " must be static");
+
+                    Method other;
+                    if ((other = default_suppliers.put(sup.field(), m)) != null) {
+                        throw new IllegalArgumentException("Default field value supplier method defined for field '" + sup.field()
+                                + "' more than once. Problem methods: " + other + ", " + m);
+                    }
                 }
             }
 
@@ -132,15 +138,14 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
                 if ((field.getModifiers() & Modifier.TRANSIENT) != 0) continue;
 
                 SchemaIgnore ignore = field.getAnnotation(SchemaIgnore.class);
-                if (ignore != null) continue;
+                if (ignore != null) { default_suppliers.remove(field.getName()); continue; }
 
                 Method default_supplier = default_suppliers.remove(field.getName());
                 if (default_supplier != null) {
-                    if ((default_supplier.getModifiers() & Modifier.PUBLIC) == 0) {
+                    if (!default_supplier.trySetAccessible())
                         throw new IllegalArgumentException(
-                                "Default field value method " + default_supplier + " must be public"
+                                "Default field value method " + default_supplier + " is not accessible"
                         );
-                    }
                     if (!field.getType().isAssignableFrom(default_supplier.getReturnType())) {
                         throw new IllegalArgumentException(
                                 "Default field value method " + default_supplier + " return type is incompatible with field "

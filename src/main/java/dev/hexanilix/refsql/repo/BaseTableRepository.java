@@ -1,6 +1,7 @@
 package dev.hexanilix.refsql.repo;
 
 import dev.hexanilix.refsql.ConvertingFunction;
+import dev.hexanilix.refsql.SimpleConvertingFunction;
 import dev.hexanilix.refsql.SqlErrorHandler;
 import dev.hexanilix.refsql.SqlType;
 import dev.hexanilix.refsql.exceptions.SqlExecutionError;
@@ -158,6 +159,7 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         } catch (SQLException e) { throw new SqlExecutionError(count_query, e); }
     }
 
+    public <T> List<T> getAll(SimpleConvertingFunction<T> func) throws SqlExecutionError { return this.getAll((ConvertingFunction<T>) func); }
     public <T> List<T> getAll(ConvertingFunction<T> func) throws SqlExecutionError {
         try (Statement s = db.createStatement();
              ResultSet set = s.executeQuery(select_all_query)) {
@@ -167,6 +169,7 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
+    public <T> List<T> getAll(@NotNull SelectModifiers modifs, SimpleConvertingFunction<T> func) throws SqlExecutionError { return this.getAll(modifs, (ConvertingFunction<T>) func); }
     public <T> List<T> getAll(@NotNull SelectModifiers modifs, ConvertingFunction<T> func) throws SqlExecutionError {
         String query = select_all_query + " " + modifs.build(schema.getTypeRelationManager());
         try (Statement s = db.createStatement();
@@ -177,10 +180,12 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
+    public <T> List<T> getList(String query, SimpleConvertingFunction<T> func, Object... params) throws SqlExecutionError { return this.getList(query, (ConvertingFunction<T>) func, params); }
     public <T> List<T> getList(String query, ConvertingFunction<T> func, Object... params) throws SqlExecutionError {
         return getList(query, func, Arrays.asList(params));
     }
 
+    public <T> List<T> getList(String query, SimpleConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError { return this.getList(query, (ConvertingFunction<T>) func, params); }
     public <T> List<T> getList(String query, ConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError {
         try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()))) {
             return readRsAsList(setValues(ps, params).executeQuery(), func);
@@ -189,10 +194,12 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
-    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Object @NotNull ... params) throws SqlExecutionError {
+    public <T> Optional<T> getOne(String query, SimpleConvertingFunction<T> func, Object ... params) throws SqlExecutionError { return this.getOne(query, (ConvertingFunction<T>) func, params); }
+    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Object ... params) throws SqlExecutionError {
         return getOne(query, func, Arrays.asList(params));
     }
 
+    public <T> Optional<T> getOne(String query, SimpleConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError { return this.getOne(query, (ConvertingFunction<T>) func, params); }
     public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError {
         try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()))) {
             return readRsAsOne(setValues(ps, params).executeQuery(), func);
@@ -267,10 +274,12 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         return s;
     }
 
+    public <T> Optional<T> getByPrimaryKey(SimpleConvertingFunction<T> func, Object... keys) throws SqlExecutionError { return getByPrimaryKey((ConvertingFunction<T>) func, Arrays.asList(keys)); }
     public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, Object... keys) throws SqlExecutionError {
         return getByPrimaryKey(func, Arrays.asList(keys));
     }
 
+    public <T> Optional<T> getByPrimaryKey(SimpleConvertingFunction<T> func, Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException { this.getByPrimaryKey((ConvertingFunction<T>) func, keys); return Optional.empty(); }
     public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         try (PreparedStatement ps = primaryKeyStatement(get_by_primary_key_query, keys)) {
             return readRsAsOne(ps.executeQuery(), func);
@@ -303,9 +312,11 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
+    public <T> List<T> page(String where, String order_by, long offset, long limit, SimpleConvertingFunction<T> func, Object... values) throws SqlExecutionError { return this.page(where, order_by, offset, limit, (ConvertingFunction<T>) func, Arrays.asList(values)); }
     public <T> List<T> page(String where, String order_by, long offset, long limit, ConvertingFunction<T> func, Object... values) throws SqlExecutionError {
         return page(where, order_by, offset, limit, func, Arrays.asList(values));
     }
+    public <T> List<T> page(String where, String order_by, long offset, long limit, SimpleConvertingFunction<T> func, @Nullable Collection<?> values) throws SqlExecutionError { return this.page(where, order_by, offset, limit, (ConvertingFunction<T>) func, values); }
     public <T> List<T> page(String where, String order_by, long offset, long limit, ConvertingFunction<T> func, @Nullable Collection<?> values) throws SqlExecutionError {
         String query = "SELECT * FROM " + this.schema.getName();
         if (where != null) query += " WHERE " + where;

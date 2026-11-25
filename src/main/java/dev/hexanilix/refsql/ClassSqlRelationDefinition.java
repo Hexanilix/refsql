@@ -1,5 +1,6 @@
 package dev.hexanilix.refsql;
 
+import dev.hexanilix.refsql.table.schema.middleware.ResultSetColumnMetadata;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -11,14 +12,14 @@ import java.util.function.Function;
 public abstract class ClassSqlRelationDefinition<T> {
 
     public interface TOT<T> {
-        T apply(ResultSet rs, String key) throws SQLException;
+        T apply(ResultSet rs, ResultSetColumnMetadata meta) throws SQLException;
     }
 
     @Contract(value = "_, _ -> new", pure = true)
     public static <T> @NotNull ClassSqlRelationDefinition<T> textRelation(Function<T, ?> toSql, TOT<T> fromSql) {
         return new ClassSqlRelationDefinition<>(SqlType.TEXT) {
             @Override
-            public T fromSql(ResultSet rs, String key) throws SQLException { return fromSql.apply(rs, key); }
+            public T fromSql(ResultSet rs, ResultSetColumnMetadata meta) throws SQLException { return fromSql.apply(rs, meta); }
 
             @Override
             public Object toSql(T t) { return toSql.apply(t); }
@@ -30,7 +31,7 @@ public abstract class ClassSqlRelationDefinition<T> {
         this.sql_type = sql_type;
     }
 
-    public abstract T fromSql(ResultSet rs, String key) throws SQLException;
+    public abstract T fromSql(ResultSet rs, ResultSetColumnMetadata meta) throws SQLException;
 
     protected abstract Object toSql(T t);
 
