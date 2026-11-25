@@ -1,7 +1,9 @@
 package dev.hexanilix.refsql.table.schema.middleware;
 
+import dev.hexanilix.Pair;
 import dev.hexanilix.refsql.ConvertingFunction;
-import dev.hexanilix.refsql.table.FieldTableColumn;
+import dev.hexanilix.refsql.exceptions.MissingColumnInResultSetException;
+import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import org.jetbrains.annotations.NotNull;
 
@@ -9,12 +11,11 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Set;
 
 public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> {
 
-    private record ColumnReadPair(FieldTableColumn column, ColumnReader reader) {};
-
-    private final ColumnReadPair[] map;
+    private final Pair<FieldTableColumn, ColumnReader>[] readers;
     private final Constructor<T> constructor;
     public DefaultClassConvertingFunction(@NotNull ClassTableSchema<T> schema) {
         Class<T> clazz = schema.getEntityClass();
@@ -27,11 +28,11 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
                     e
             );
         }
-        map = new ColumnReadPair[schema.getColumns().size()];
+        readers = new Pair[schema.getColumns().size()];
 
         int i = 0;
         for (FieldTableColumn c : schema.getColumns()) {
-            map[i++] = new ColumnReadPair(
+            readers[i++] = Pair.of(
                     c,
                     ColumnReader.createFor(
                             c.getName(),
@@ -43,11 +44,23 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
     }
 
     @Override
-    public T apply(ResultSet rs) throws SQLException {
+    public T apply(@NotNull ResultSet rs) throws SQLException {
         try {
             T t = constructor.newInstance();
-            for (ColumnReadPair p : map)
-                p.column.getField().set(t, p.reader.read(rs));
+            Set<String> columnNames = ColumnReader.getColumns(rs);
+
+            for (Pair<FieldTableColumn, ColumnReader> p : readers) {
+                String columnName = p.key().getName();
+
+                if (columnNames.contains(columnName)) {
+                    p.key().getField().set(t, p.value().read(rs));
+                } else if (!p.key().allowsNotPresent()) {
+                    throw new MissingColumnInResultSetException(
+                            "Column " + columnName + " was not found in the result set"
+                    );
+                }
+            }
+
             return t;
         } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
             throw new RuntimeException(e);

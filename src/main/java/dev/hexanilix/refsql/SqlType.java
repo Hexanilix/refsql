@@ -82,7 +82,7 @@ public enum SqlType {
         return aliases[0];
     }
 
-
+    
     /**
      * Converts a class fields value into a compatible SQL type
      *
@@ -90,7 +90,7 @@ public enum SqlType {
      * @return A JDBC Potsrges compatible object value
      * @throws IllegalStateException Occurs when the resulting object is not a SQL compatible value
      */
-    public static Object convert(Object value) throws IllegalStateException { return convert(value, null); }
+    public static Object toSqlValue(Object value) throws IllegalStateException { return toSqlValue(value, null); }
 
     /**
      * Converts a class fields value into a compatible SQL type
@@ -101,7 +101,7 @@ public enum SqlType {
      * @param <Obj> Helper type
      * @throws IllegalStateException Occurs when the resulting object is not a SQL compatible value
      */
-    public static <Obj> Object convert(Object value, @Nullable TypeRelationManager mgr) throws IllegalStateException {
+    public static <Obj> Object toSqlValue(Object value, @Nullable TypeRelationManager mgr) throws IllegalStateException {
         if (value != null) {
             Class<Obj> value_clazz = (Class<Obj>) value.getClass();
             boolean to_convert = true;

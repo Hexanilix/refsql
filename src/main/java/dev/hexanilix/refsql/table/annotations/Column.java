@@ -10,4 +10,8 @@ import java.lang.annotation.Target;
 public @interface Column {
     boolean nullable() default true;
     String def() default "";
+    boolean allowNotPresent() default false;
+    boolean autoIncrement() default false;
+    boolean unique() default false;
+
 }

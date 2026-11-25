@@ -1,6 +1,6 @@
 package dev.hexanilix.refsql.queries;
 
-import dev.hexanilix.refsql.table.TableColumn;
+import dev.hexanilix.refsql.table.schema.column.TableColumn;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 

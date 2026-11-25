@@ -2,19 +2,22 @@ package dev.hexanilix.refsql.repo;
 
 import dev.hexanilix.refsql.SqlType;
 import dev.hexanilix.refsql.queries.select.SelectModifiers;
-import dev.hexanilix.refsql.table.FieldTableColumn;
+import dev.hexanilix.refsql.repo.cache.TableSnapshot;
+import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchema<T>> {
+public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchema<T>> implements TablePrimaryKeyRequester<T> {
 
     // You can probably still have custom mapping for these. I'll add this if needed
 //    private static final List<Class<?>> RESTRICTED_TYPES = List.of(
@@ -38,7 +41,7 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
     }
 
     public List<T> getList(String query, Object @NotNull ... params) throws SQLException {
-        return getList(
+        return super.getList(
                 query,
                 schema.getConvertingFunction(),
                 params
@@ -46,29 +49,26 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
     }
 
     public Optional<T> getOne(String query, Object @NotNull ... params) throws SQLException {
-        return getOne(
+        return super.getOne(
                 query,
                 schema.getConvertingFunction(),
                 params
         );
     }
 
-    public int update(String query, Object @NotNull ... params) throws SQLException {
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()))) {
-            int i = 1;
-            for (Object param : params)
-                ps.setObject(i++, param);
-
-            return ps.executeUpdate();
-        }
+    public List<T> page(String where, String order_by, long offset, long limit, @Nullable Collection<?> values) {
+        return super.page(where, order_by, offset, limit, schema.getConvertingFunction(), values);
+    }
+    public List<T> page(String where, String order_by, long offset, long limit, Object... values) {
+        return super.page(where, order_by, offset, limit, schema.getConvertingFunction(), Arrays.asList(values));
     }
 
-    private Object getSqlTypeFromField(@NotNull Field field, Object entity) throws SQLException {
+    private Object getSqlTypeFromField(@NotNull Field field, @NotNull Object entity) throws SQLException {
         Object sql_value;
         try {
             field.setAccessible(true);
             Object value = field.get(entity);
-            sql_value = SqlType.convert(value, schema.getTypeRelationManager());
+            sql_value = SqlType.toSqlValue(value, schema.getTypeRelationManager());
         } catch (IllegalArgumentException | IllegalAccessException e) {
             throw new IllegalStateException(
                     "Failed conversion to SQL type for "
@@ -78,7 +78,12 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
         return sql_value;
     }
 
-    public boolean upsert(T entity) {
+    /**
+     *
+     * @param entity
+     * @return Whether a row changed or was created
+     */
+    public boolean upsert(@NotNull T entity) {
         try (PreparedStatement s = db.prepareStatement(upsert_query)) {
             int i = 1;
             for (FieldTableColumn c : schema.getColumns())
@@ -93,9 +98,10 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
     /**
      * Performs an upsert batch
      * @param entities
-     * @return whether all entities were upsert
+     * @return Array with the amount of created/wffected rows per entity upsert
+     * (0 - nothing changed, 1 - row was updated/created)
      */
-    public boolean upsert(@NotNull Collection<T> entities) {
+    public int[] upsert(@NotNull Collection<@NotNull T> entities) {
         try (PreparedStatement s = db.prepareStatement(upsert_query)) {
             for (T entity : entities) {
                 int i = 1;
@@ -104,19 +110,24 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
 
                 s.addBatch();
             }
-            return s.executeBatch().length == entities.size();
+            return s.executeBatch();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
+    @Override
     public Optional<T> getByPrimaryKey(Object... keys) {
         return this.getByPrimaryKey(schema.getConvertingFunction(), keys);
     }
 
-    public Optional<T> getByPrimaryKey(Collection<Object> keys) throws IllegalStateException, IllegalArgumentException {
+    @Override
+    public Optional<T> getByPrimaryKey(Collection<?> keys) throws IllegalStateException, IllegalArgumentException {
         return this.getByPrimaryKey(schema.getConvertingFunction(), keys);
     }
 
 
+    public TableSnapshot<T> createPrimaryKeySnapshot() {
+        return super.createPrimaryKeySnapshot(schema.getConvertingFunction());
+    }
 }

@@ -1,7 +1,7 @@
 package dev.hexanilix.refsql.table.schema.middleware;
 
 import dev.hexanilix.refsql.ConvertingFunction;
-import dev.hexanilix.refsql.table.FieldTableColumn;
+import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import org.jetbrains.annotations.NotNull;
 

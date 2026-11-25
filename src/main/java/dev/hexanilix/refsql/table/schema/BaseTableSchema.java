@@ -1,10 +1,12 @@
 package dev.hexanilix.refsql.table.schema;
 
 import dev.hexanilix.refsql.TypeRelationManager;
-import dev.hexanilix.refsql.table.TableColumn;
+import dev.hexanilix.refsql.table.schema.column.TableColumn;
+import dev.hexanilix.refsql.table.TableIndex;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.*;
 
@@ -34,19 +36,23 @@ public class BaseTableSchema<TC extends TableColumn> {
 
         @Contract(" -> new")
         public @NotNull BaseTableSchema<T> build() {
-            return new BaseTableSchema<>(name, type_relation_manager, columns, primary_keys);
+            return new BaseTableSchema<>(name, type_relation_manager, columns, primary_keys, null);
         }
     }
 
     protected final String name;
-    protected final List<TC> columns;
-    protected final List<TC> primary_keys;
+    protected final @Unmodifiable @NotNull List<TC> columns;
+    protected final @Unmodifiable @Nullable List<TC> primary_keys;
+    protected final @Unmodifiable @Nullable List<TableIndex> indexes;
+//    protected final @Unmodifiable @Nullable List<ForeignKeyRelation> foreign_keys;
+//    protected final @Nullable BaseTableRepository<BaseTableSchema<TC>> repo;
     private final TypeRelationManager type_relation_manager;
     public BaseTableSchema(
             @NotNull String name,
             @Nullable TypeRelationManager type_relation_manager,
             @NotNull List<TC> columns,
-            @Nullable List<TC> primary_keys
+            @Nullable List<TC> primary_keys,
+            @Nullable List<TableIndex> indexes
     ) {
         this.name = name;
         this.type_relation_manager = type_relation_manager;
@@ -77,20 +83,33 @@ public class BaseTableSchema<TC extends TableColumn> {
             }
             this.primary_keys = Collections.unmodifiableList(keys);
         } else this.primary_keys = null;
+
+        if (indexes != null) {
+            List<TableIndex> filtered = new ArrayList<>();
+
+            for (TableIndex index : indexes) {
+                if (index.duplicatesPrimaryKey(this.primary_keys))
+                    continue;
+
+                filtered.add(index);
+            }
+
+            this.indexes = Collections.unmodifiableList(filtered);
+        } else this.indexes = Collections.emptyList();
     }
 
     public BaseTableSchema(@NotNull String name, TypeRelationManager type_relation_manager, @NotNull List<TC> columns) {
-        this(name, type_relation_manager, columns, null);
+        this(name, type_relation_manager, columns, null, null);
     }
     public BaseTableSchema(@NotNull String name, @NotNull List<TC> columns) {
-        this(name, null, columns, null);
+        this(name, null, columns, null, null);
     }
 
     public String getName() {
         return name;
     }
 
-    public List<TC> getColumns() {
+    public @Unmodifiable @NotNull List<TC> getColumns() {
         return columns;
     }
 
@@ -105,8 +124,16 @@ public class BaseTableSchema<TC extends TableColumn> {
         return primary_keys != null;
     }
 
-    public @Nullable List<TC> getPrimaryKeys() {
+    public @Unmodifiable @Nullable List<TC> getPrimaryKeys() {
         return primary_keys;
+    }
+
+    public boolean hasIndexes() {
+        return indexes != null;
+    }
+
+    public @Nullable List<TableIndex> getIndexes() {
+        return indexes;
     }
 
     public boolean hasTypeRelationManager() {
@@ -117,26 +144,43 @@ public class BaseTableSchema<TC extends TableColumn> {
     }
 
     public String createTableIfNotExistsSql() {
-        StringBuilder sb = new StringBuilder("CREATE TABLE IF NOT EXISTS " + name + " (" + buildTableBody());
+        return createTableIfNotExistsSql(false);
+    }
+    public String createTableIfNotExistsSql(boolean pretty) {
+        StringBuilder sb = new StringBuilder("CREATE TABLE IF NOT EXISTS " + name + " (");
+        if (pretty) sb.append("\n\t");
+        sb.append(buildTableBody(pretty));
         if (hasPrimaryKey()) {
-            sb.append(", PRIMARY KEY (");
+            sb.append(",");
+            if (pretty) sb.append("\n\n\t");
+            sb.append("PRIMARY KEY (");
+
             boolean comma = false;
             for (TC primary_key : primary_keys) {
                 if (comma) sb.append(",");
+                if (pretty) sb.append("\n\t\t");
                 sb.append(primary_key.getName());
                 comma = true;
             }
+            if (pretty) sb.append("\n\t");
             sb.append(")");
+            if (pretty) sb.append("\n");
         }
         return sb.append(')').toString();
     }
 
     public String buildTableBody() {
+        return buildTableBody(false);
+    }
+    public String buildTableBody(boolean pretty) {
         StringBuilder sb = new StringBuilder();
-
         boolean comma = false;
         for (TC column : columns) {
-            if (comma) sb.append(", ");
+            if (comma) {
+                sb.append(", ");
+                if (pretty)
+                    sb.append("\n\t");
+            }
             sb.append(column.toColumnSql(primary_keys != null && primary_keys.contains(column)));
             comma = true;
         }
