@@ -10,30 +10,35 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-
 public class ResultSetMap {
 
-    private final HashMap<String, ResultSetColumnMetadata> map = new HashMap<>();
-    private final Set<String> duplicates = new HashSet<>();
+    private final HashMap<String, ResultSetColumnMetadata> map;
 
     public ResultSetMap(@NotNull ResultSet resultSet) throws SQLException {
         ResultSetMetaData metadata = resultSet.getMetaData();
+        int columnCount = metadata.getColumnCount();
 
-        for (int i = 1; i <= metadata.getColumnCount(); i++) {
-            var meta = ResultSetColumnMetadata.of(metadata, i);
+        this.map = HashMap.newHashMap(columnCount * 2);
+        Set<String> duplicates = null;
+
+        for (int i = 1; i <= columnCount; i++) {
             String name = metadata.getColumnLabel(i);
+            var meta = new ResultSetColumnMetadata(metadata, i, name);
 
-            if (duplicates.contains(name))
-                map.put(name + ":" + meta.table() , meta);
-
-            if (map.containsKey(name)) {
-                var old = map.remove(name);
-                map.put(name + ":" + old.table(), old);
-                duplicates.add(name);
-
-                map.put(name + ":" + meta.table() , meta);
-            } else
-                map.put(name, meta);
+            if (duplicates != null && duplicates.contains(name)) {
+                map.put(name + ":" + meta.table(), meta);
+            } else {
+                var old = map.put(name, meta);
+                if (old != null) {
+                    map.remove(name);
+                    if (duplicates == null) {
+                        duplicates = new HashSet<>();
+                    }
+                    duplicates.add(name);
+                    map.put(name + ":" + old.table(), old);
+                    map.put(name + ":" + meta.table(), meta);
+                }
+            }
         }
     }
 
@@ -41,6 +46,12 @@ public class ResultSetMap {
             @NotNull String name, String table) {
         var r = map.get(name);
         return r != null ? r : map.get(name + ":" + table);
+    }
+
+    public @Nullable ResultSetColumnMetadata getQualified(
+            @NotNull String name, @NotNull String qualifiedName) {
+        var r = map.get(name);
+        return r != null ? r : map.get(qualifiedName);
     }
 
     public HashMap<String, ResultSetColumnMetadata> getMap() {
@@ -52,4 +63,3 @@ public class ResultSetMap {
         return map.toString();
     }
 }
-

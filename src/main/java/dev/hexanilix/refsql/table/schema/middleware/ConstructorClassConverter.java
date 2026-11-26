@@ -2,7 +2,6 @@ package dev.hexanilix.refsql.table.schema.middleware;
 
 import dev.hexanilix.reflection.constructors.references.*;
 import dev.hexanilix.refsql.ConvertingFunction;
-import dev.hexanilix.refsql.exceptions.MissingColumnInResultSetException;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
@@ -82,6 +81,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
     ) {
         this.schema = schema;
         this.constructor = constructor;
+        this.constructor.trySetAccessible();
 
         if (!constructor.getDeclaringClass().equals(clazz))
             throw new IllegalArgumentException(
@@ -115,8 +115,9 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
                 );
             }
 
-            mappings[i] = new ColumnMapping<>(
+            mappings[i] = ColumnMapping.of(
                     column,
+                    schema.getName(),
                     ColumnReader.createFor(
                         column.getName(),
                         parameterTypes[i],
@@ -185,20 +186,17 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
     public T apply(ResultSet rs, ResultSetMap map) throws SQLException {
         try {
             Object[] values = new Object[mappings.length];
-            
+
             for (int i = 0; i < mappings.length; i++) {
                 ColumnMapping<?> mapping = mappings[i];
                 TableColumn column = mapping.column();
-                String name = column.getName();
 
-                ResultSetColumnMetadata meta = map.get(name, schema.getName());
+                ResultSetColumnMetadata meta =
+                        map.getQualified(column.getName(), mapping.qualifiedName());
+
                 if (meta != null) {
                     values[i] = mapping.reader().read(rs, meta);
-                } else if (column.hasDefaultValue()) {
-                    values[i] = DefaultClassConvertingFunction.getDefaultValueOnNotPresent(column, mapping.clazz(), schema);
-                } else throw new MissingColumnInResultSetException(
-                    "Column " + name + " of " + schema.getName() + " was not found in the result set. Attempted to compensate with default value, but one wasn't defined for this column"
-                );
+                }
             }
 
             return constructor.newInstance(values);

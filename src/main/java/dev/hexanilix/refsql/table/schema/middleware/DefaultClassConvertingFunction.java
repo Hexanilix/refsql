@@ -51,8 +51,9 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
             if (!field.trySetAccessible())
                 throw new IllegalArgumentException("Field " + field.getName() + " is not accessible to DefaultClassConvertingFunction. Ensure proper access or define a explicit converting function.");
 
-            readers[i++] = new ColumnMapping<>(
+            readers[i++] = ColumnMapping.of(
                     c,
+                    schema.getName(),
                     ColumnReader.createFor(
                             c.getName(),
                             field.getType(),
@@ -112,7 +113,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
                 FieldTableColumn column = mapping.column();
                 String name = column.getName();
 
-                ResultSetColumnMetadata meta = map.get(name, schema.getName());
+                ResultSetColumnMetadata meta = map.getQualified(name, mapping.qualifiedName());
 
                 if (meta != null) {
                     column.getField().set(t, mapping.reader().read(rs, meta));

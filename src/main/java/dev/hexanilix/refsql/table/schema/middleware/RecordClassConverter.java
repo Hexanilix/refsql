@@ -43,8 +43,9 @@ public class RecordClassConverter<T extends Record> implements ConvertingFunctio
             if (component == null)
                 throw new IllegalStateException("No record component for column " + ftc);
 
-            mappings[i] = new ColumnMapping<>(
+            mappings[i] = ColumnMapping.of(
                     ftc,
+                    schema.getName(),
                     ColumnReader.createFor(
                         ftc.getName(),
                         (type_map[i] = component.getType()),
@@ -56,6 +57,7 @@ public class RecordClassConverter<T extends Record> implements ConvertingFunctio
 
         try {
             constructor = clazz.getDeclaredConstructor(type_map);
+            constructor.trySetAccessible();
         }  catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
@@ -71,7 +73,7 @@ public class RecordClassConverter<T extends Record> implements ConvertingFunctio
                 FieldTableColumn column = mapping.column();
                 String name = mapping.column().getName();
 
-                ResultSetColumnMetadata meta = map.get(name, schema.getName());
+                ResultSetColumnMetadata meta = map.getQualified(name, mapping.qualifiedName());
                 if (meta != null) {
                     values[i] = mapping.reader().read(rs, meta);
                 } else if (column.hasDefaultValue()) {

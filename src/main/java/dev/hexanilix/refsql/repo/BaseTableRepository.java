@@ -12,6 +12,7 @@ import dev.hexanilix.refsql.repo.cache.TableSnapshot;
 import dev.hexanilix.refsql.table.schema.column.TableColumn;
 import dev.hexanilix.refsql.table.TableIndex;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
+import dev.hexanilix.refsql.table.schema.middleware.ResultSetMap;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -48,12 +49,26 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
 
     public static <T> @NotNull ArrayList<T> readRsAsList(@NotNull ResultSet rs, ConvertingFunction<T> func) throws SQLException {
         ArrayList<T> list = new ArrayList<>();
-        while (rs.next())
-            list.add(func.apply(rs));
+        if (rs.next()) {
+            if (func instanceof SimpleConvertingFunction<T> simple) {
+                do {
+                    list.add(simple.apply(rs));
+                } while (rs.next());
+            } else {
+                ResultSetMap map = new ResultSetMap(rs);
+                do {
+                    list.add(func.apply(rs, map));
+                } while (rs.next());
+            }
+        }
         return list;
     }
     public static <T> @NotNull Optional<T> readRsAsOne(@NotNull ResultSet rs, ConvertingFunction<T> func) throws SQLException {
-        return rs.next() ? Optional.ofNullable(func.apply(rs)) : Optional.empty();
+        if (!rs.next()) return Optional.empty();
+        if (func instanceof SimpleConvertingFunction<T> simple) {
+            return Optional.ofNullable(simple.apply(rs));
+        }
+        return Optional.ofNullable(func.apply(rs, new ResultSetMap(rs)));
     }
 
     protected final Connection db;
@@ -187,8 +202,9 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
 
     public <T> List<T> getList(String query, SimpleConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError { return this.getList(query, (ConvertingFunction<T>) func, params); }
     public <T> List<T> getList(String query, ConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError {
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()))) {
-            return readRsAsList(setValues(ps, params).executeQuery(), func);
+        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()));
+             ResultSet rs = setValues(ps, params).executeQuery()) {
+            return readRsAsList(rs, func);
         } catch (SQLException e) {
             throw SqlErrorHandler.handle(query, e);
         }
@@ -201,8 +217,9 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
 
     public <T> Optional<T> getOne(String query, SimpleConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError { return this.getOne(query, (ConvertingFunction<T>) func, params); }
     public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError {
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()))) {
-            return readRsAsOne(setValues(ps, params).executeQuery(), func);
+        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()));
+             ResultSet rs = setValues(ps, params).executeQuery()) {
+            return readRsAsOne(rs, func);
         } catch (SQLException e) {
             throw SqlErrorHandler.handle(query, e);
         }
@@ -382,16 +399,25 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
 
             HashMap<CompositeKey, T> map = new HashMap<>();
 
-            List<? extends TableColumn> primaryKeys = schema.getPrimaryKeys();
+            if (rs.next()) {
+                List<? extends TableColumn> primaryKeys = schema.getPrimaryKeys();
+                int pkSize = primaryKeys.size();
+                ResultSetMap rsMap = new ResultSetMap(rs);
 
-            while (rs.next()) {
-                Object[] keys = new Object[primaryKeys.size()];
+                int[] pkIndices = new int[pkSize];
+                for (int i = 0; i < pkSize; i++) {
+                    var pkMeta = rsMap.get(primaryKeys.get(i).getName(), schema.getName());
+                    pkIndices[i] = pkMeta != null ? pkMeta.index() : rs.findColumn(primaryKeys.get(i).getName());
+                }
 
-                for (int i = 0; i < primaryKeys.size(); i++)
-                    keys[i] = rs.getObject(primaryKeys.get(i).getName());
+                do {
+                    Object[] keys = new Object[pkSize];
+                    for (int i = 0; i < pkSize; i++)
+                        keys[i] = rs.getObject(pkIndices[i]);
 
-                T value = func.apply(rs);
-                map.put(new CompositeKey(keys), value);
+                    T value = func.apply(rs, rsMap);
+                    map.put(new CompositeKey(keys), value);
+                } while (rs.next());
             }
 
             return new TableSnapshot<>(map);
