@@ -1,4 +1,4 @@
-package dev.hexanilix.refsql.table.schema.middleware;
+package dev.hexanilix.refsql.table.schema.middleware.mapping;
 
 import org.jetbrains.annotations.NotNull;
 

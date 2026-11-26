@@ -1,6 +1,6 @@
 package dev.hexanilix.refsql;
 
-import dev.hexanilix.refsql.table.schema.middleware.ResultSetColumnMetadata;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ResultSetColumnMetadata;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 

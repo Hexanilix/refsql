@@ -1,18 +1,17 @@
 package dev.hexanilix.refsql.repo;
 
 import dev.hexanilix.refsql.ConvertingFunction;
-import dev.hexanilix.refsql.SimpleConvertingFunction;
 import dev.hexanilix.refsql.SqlErrorHandler;
 import dev.hexanilix.refsql.SqlType;
 import dev.hexanilix.refsql.exceptions.SqlExecutionError;
+import dev.hexanilix.refsql.exceptions.SqlResultError;
 import dev.hexanilix.refsql.queries.Upsert;
-import dev.hexanilix.refsql.queries.select.SelectModifiers;
 import dev.hexanilix.refsql.repo.cache.CompositeKey;
 import dev.hexanilix.refsql.repo.cache.TableSnapshot;
-import dev.hexanilix.refsql.table.schema.column.TableColumn;
 import dev.hexanilix.refsql.table.TableIndex;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
-import dev.hexanilix.refsql.table.schema.middleware.ResultSetMap;
+import dev.hexanilix.refsql.table.schema.column.TableColumn;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.QueryResult;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,30 +44,6 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         for (Object value : values)
             ps.setObject(i++, value);
         return ps;
-    }
-
-    public static <T> @NotNull ArrayList<T> readRsAsList(@NotNull ResultSet rs, ConvertingFunction<T> func) throws SQLException {
-        ArrayList<T> list = new ArrayList<>();
-        if (rs.next()) {
-            if (func instanceof SimpleConvertingFunction<T> simple) {
-                do {
-                    list.add(simple.apply(rs));
-                } while (rs.next());
-            } else {
-                ResultSetMap map = new ResultSetMap(rs);
-                do {
-                    list.add(func.apply(rs, map));
-                } while (rs.next());
-            }
-        }
-        return list;
-    }
-    public static <T> @NotNull Optional<T> readRsAsOne(@NotNull ResultSet rs, ConvertingFunction<T> func) throws SQLException {
-        if (!rs.next()) return Optional.empty();
-        if (func instanceof SimpleConvertingFunction<T> simple) {
-            return Optional.ofNullable(simple.apply(rs));
-        }
-        return Optional.ofNullable(func.apply(rs, new ResultSetMap(rs)));
     }
 
     protected final Connection db;
@@ -173,56 +148,50 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
             return rs.getLong(1);
         } catch (SQLException e) { throw new SqlExecutionError(count_query, e); }
     }
+    
+    private PreparedStatement newPreStatement(@NotNull String sql, @Nullable Collection<?> values) throws SQLException {
+        return setValues(db.prepareStatement(sql), values);
+    }
+    
+    public QueryResult query(String sql, @Nullable Collection<?> values) throws SqlExecutionError {
+        sql = formatQuery(sql, schema);
+        try {
+            PreparedStatement ps = newPreStatement(sql, values);
+            return new QueryResult(ps.executeQuery());
+        } catch (SQLException e) { throw new SqlExecutionError(sql, e); }
+    }
+    
+    public QueryResult query(String sql) throws SqlExecutionError {
+        sql = formatQuery(sql, schema);
+        try {
+            Statement ps = db.createStatement();
+            return new QueryResult(ps.executeQuery(sql));
+        } catch (SQLException e) { throw new SqlExecutionError(sql, e); }
+    }
 
-    public <T> List<T> getAll(SimpleConvertingFunction<T> func) throws SqlExecutionError { return this.getAll((ConvertingFunction<T>) func); }
-    public <T> List<T> getAll(ConvertingFunction<T> func) throws SqlExecutionError {
-        try (Statement s = db.createStatement();
-             ResultSet set = s.executeQuery(select_all_query)) {
-            return readRsAsList(set, func);
+    public <T> List<T> getAll(@NotNull ConvertingFunction<T> func) throws SqlExecutionError, SqlResultError {
+        try (QueryResult qr = query(select_all_query)) {
+            return func.applyToList(qr);
+        } catch (SQLException e) { throw new SqlResultError(e); }
+    }
+
+    public <T> List<T> getList(String query, ConvertingFunction<T> func, Object... params) throws SqlExecutionError
+    { return getList(query, func, Arrays.asList(params)); }
+    public <T> List<T> getList(String query, @NotNull ConvertingFunction<T> func, @Nullable Collection<?> values) throws SqlExecutionError {
+        try (QueryResult qr = query(query, values)) {
+            return func.applyToList(qr);
         } catch (SQLException e) {
-            throw new SqlExecutionError(select_all_query, e);
+            throw new SqlResultError(e);
         }
     }
 
-    public <T> List<T> getAll(@NotNull SelectModifiers modifs, SimpleConvertingFunction<T> func) throws SqlExecutionError { return this.getAll(modifs, (ConvertingFunction<T>) func); }
-    public <T> List<T> getAll(@NotNull SelectModifiers modifs, ConvertingFunction<T> func) throws SqlExecutionError {
-        String query = select_all_query + " " + modifs.build(schema.getTypeRelationManager());
-        try (Statement s = db.createStatement();
-             ResultSet set = s.executeQuery(query)) {
-            return readRsAsList(set, func);
-        } catch (SQLException e) {
-            throw SqlErrorHandler.handle(query, e);
-        }
-    }
+    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Object ... params) throws SqlExecutionError
+    { return getOne(query, func, Arrays.asList(params)); }
 
-    public <T> List<T> getList(String query, SimpleConvertingFunction<T> func, Object... params) throws SqlExecutionError { return this.getList(query, (ConvertingFunction<T>) func, params); }
-    public <T> List<T> getList(String query, ConvertingFunction<T> func, Object... params) throws SqlExecutionError {
-        return getList(query, func, Arrays.asList(params));
-    }
-
-    public <T> List<T> getList(String query, SimpleConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError { return this.getList(query, (ConvertingFunction<T>) func, params); }
-    public <T> List<T> getList(String query, ConvertingFunction<T> func, @Nullable Collection<?> params) throws SqlExecutionError {
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()));
-             ResultSet rs = setValues(ps, params).executeQuery()) {
-            return readRsAsList(rs, func);
-        } catch (SQLException e) {
-            throw SqlErrorHandler.handle(query, e);
-        }
-    }
-
-    public <T> Optional<T> getOne(String query, SimpleConvertingFunction<T> func, Object ... params) throws SqlExecutionError { return this.getOne(query, (ConvertingFunction<T>) func, params); }
-    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Object ... params) throws SqlExecutionError {
-        return getOne(query, func, Arrays.asList(params));
-    }
-
-    public <T> Optional<T> getOne(String query, SimpleConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError { return this.getOne(query, (ConvertingFunction<T>) func, params); }
-    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Collection<?> params) throws SqlExecutionError {
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()));
-             ResultSet rs = setValues(ps, params).executeQuery()) {
-            return readRsAsOne(rs, func);
-        } catch (SQLException e) {
-            throw SqlErrorHandler.handle(query, e);
-        }
+    public <T> Optional<T> getOne(String query, ConvertingFunction<T> func, Collection<?> values) throws SqlExecutionError, SqlResultError {
+        try (QueryResult rq = query(query, values)) {
+            return rq.next() ? Optional.of(func.apply(rq)) : Optional.empty();
+        } catch (SQLException e) {  throw new SqlResultError(e); }
     }
 
     /**
@@ -291,24 +260,23 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         return s;
     }
 
-    public <T> Optional<T> getByPrimaryKey(SimpleConvertingFunction<T> func, Object... keys) throws SqlExecutionError { return getByPrimaryKey((ConvertingFunction<T>) func, Arrays.asList(keys)); }
-    public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, Object... keys) throws SqlExecutionError {
+    public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, Object @NotNull... keys) throws SqlExecutionError {
         return getByPrimaryKey(func, Arrays.asList(keys));
     }
 
-    public <T> Optional<T> getByPrimaryKey(SimpleConvertingFunction<T> func, Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException { this.getByPrimaryKey((ConvertingFunction<T>) func, keys); return Optional.empty(); }
-    public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
-        try (PreparedStatement ps = primaryKeyStatement(get_by_primary_key_query, keys)) {
-            return readRsAsOne(ps.executeQuery(), func);
+    public <T> Optional<T> getByPrimaryKey(ConvertingFunction<T> func, @NotNull Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+        try (PreparedStatement ps = primaryKeyStatement(get_by_primary_key_query, keys);
+                    QueryResult qr = new QueryResult(setValues(ps, keys).executeQuery())) {
+            return qr.next() ? Optional.of(func.apply(qr)) : Optional.empty();
         }  catch (SQLException e) {
             throw SqlErrorHandler.handle(get_by_primary_key_query, e);
         }
     }
 
-    public boolean existsByPrimaryKey(Object... keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+    public boolean existsByPrimaryKey(@NotNull Object @NotNull... keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         return existsByPrimaryKey(Arrays.asList(keys));
     }
-    public boolean existsByPrimaryKey(Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+    public boolean existsByPrimaryKey(@NotNull Collection<?> keys)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         try (PreparedStatement ps = primaryKeyStatement(exists_by_primary_key_query, keys)) {
             ResultSet rs = ps.executeQuery();
             return rs.next() && rs.getBoolean(1);
@@ -316,10 +284,10 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
             throw SqlErrorHandler.handle(exists_by_primary_key_query, e);
         }
     }
-    public boolean existsWhere(String where, Object... values)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+    public boolean existsWhere(String where, @Nullable Object @NotNull... values)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         return existsWhere(where, Arrays.asList(values));
     }
-    public boolean existsWhere(String where, Collection<?> values)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+    public boolean existsWhere(String where, @Nullable Collection<?> values)  throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         String query = formatQuery("SELECT EXISTS (SELECT 1 FROM :name WHERE " + where + ")", this.schema);
         try (PreparedStatement ps = db.prepareStatement(query)) {
             ResultSet rs = setValues(ps, values).executeQuery();
@@ -329,21 +297,18 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
-    public <T> List<T> page(String where, String order_by, long offset, long limit, SimpleConvertingFunction<T> func, Object... values) throws SqlExecutionError { return this.page(where, order_by, offset, limit, (ConvertingFunction<T>) func, Arrays.asList(values)); }
-    public <T> List<T> page(String where, String order_by, long offset, long limit, ConvertingFunction<T> func, Object... values) throws SqlExecutionError {
+    public <T> List<T> page(String where, String order_by, long offset, long limit, ConvertingFunction<T> func, @Nullable Object @NotNull... values) throws SqlExecutionError {
         return page(where, order_by, offset, limit, func, Arrays.asList(values));
     }
-    public <T> List<T> page(String where, String order_by, long offset, long limit, SimpleConvertingFunction<T> func, @Nullable Collection<?> values) throws SqlExecutionError { return this.page(where, order_by, offset, limit, (ConvertingFunction<T>) func, values); }
     public <T> List<T> page(String where, String order_by, long offset, long limit, ConvertingFunction<T> func, @Nullable Collection<?> values) throws SqlExecutionError {
         String query = "SELECT * FROM " + this.schema.getName();
         if (where != null) query += " WHERE " + where;
         if (order_by != null) query += " ORDER BY " + order_by;
         query += " LIMIT " + limit + " OFFSET " + offset;
-        try (PreparedStatement ps = db.prepareStatement(formatQuery(query, this.getSchema()));
-             ResultSet rs = setValues(ps, values).executeQuery()) {
-                return readRsAsList(rs, func);
+        try (QueryResult qr = query(query, values)) {
+            return func.applyToList(qr);
         } catch (SQLException e) {
-            throw SqlErrorHandler.handle(query, e);
+            throw new SqlResultError(e);
         }
     }
 
@@ -360,11 +325,11 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         }
     }
 
-    public boolean deleteByPrimaryKey(Object... keys) throws SqlExecutionError {
+    public boolean deleteByPrimaryKey(@NotNull Object @NotNull... keys) throws SqlExecutionError {
         return deleteByPrimaryKey(Arrays.asList(keys));
     }
 
-    public boolean deleteByPrimaryKey(Collection<?> keys) throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
+    public boolean deleteByPrimaryKey(@NotNull Collection<?> keys) throws SqlExecutionError, IllegalStateException, IllegalArgumentException {
         try (PreparedStatement ps = primaryKeyStatement(delete_by_primary_key_query, keys)) {
             return ps.executeUpdate() != 0;
         } catch (SQLException e) {
@@ -395,29 +360,28 @@ public class BaseTableRepository<Schema extends BaseTableSchema<?>> {
         ensureHashPrimaryKey(schema);
 
         try (Statement s = db.createStatement();
-             ResultSet rs = s.executeQuery(select_all_query)) {
+             QueryResult qr = new QueryResult(s.executeQuery(select_all_query))) {
 
             HashMap<CompositeKey, T> map = new HashMap<>();
 
-            if (rs.next()) {
+            if (qr.next()) {
                 List<? extends TableColumn> primaryKeys = schema.getPrimaryKeys();
                 int pkSize = primaryKeys.size();
-                ResultSetMap rsMap = new ResultSetMap(rs);
 
                 int[] pkIndices = new int[pkSize];
                 for (int i = 0; i < pkSize; i++) {
-                    var pkMeta = rsMap.get(primaryKeys.get(i).getName(), schema.getName());
-                    pkIndices[i] = pkMeta != null ? pkMeta.index() : rs.findColumn(primaryKeys.get(i).getName());
+                    var pkMeta = qr.getColumnMeta(primaryKeys.get(i).getName(), schema.getName());
+                    pkIndices[i] = pkMeta != null ? pkMeta.index() : qr.findColumn(primaryKeys.get(i).getName());
                 }
 
                 do {
                     Object[] keys = new Object[pkSize];
                     for (int i = 0; i < pkSize; i++)
-                        keys[i] = rs.getObject(pkIndices[i]);
+                        keys[i] = qr.getObject(pkIndices[i]);
 
-                    T value = func.apply(rs, rsMap);
+                    T value = func.apply(qr);
                     map.put(new CompositeKey(keys), value);
-                } while (rs.next());
+                } while (qr.next());
             }
 
             return new TableSnapshot<>(map);

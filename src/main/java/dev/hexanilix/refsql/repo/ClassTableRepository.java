@@ -1,10 +1,9 @@
 package dev.hexanilix.refsql.repo;
 
 import dev.hexanilix.refsql.SqlType;
-import dev.hexanilix.refsql.queries.select.SelectModifiers;
 import dev.hexanilix.refsql.repo.cache.TableSnapshot;
-import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
+import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,10 +33,6 @@ public class ClassTableRepository<T> extends BaseTableRepository<ClassTableSchem
 
     public List<T> getAll() {
         return super.getAll(schema.getConvertingFunction());
-    }
-
-    public List<T> getAll(@NotNull SelectModifiers modifs) throws SQLException {
-        return super.getAll(modifs, schema.getConvertingFunction());
     }
 
     public List<T> getList(String query, Object @NotNull ... params) throws SQLException {

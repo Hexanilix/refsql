@@ -1,27 +1,22 @@
 package dev.hexanilix.refsql.table.schema.middleware;
 
-import dev.hexanilix.refsql.ConvertingFunction;
 import dev.hexanilix.refsql.exceptions.MissingColumnInResultSetException;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.column.TableColumn;
+import dev.hexanilix.refsql.table.schema.middleware.base.ImplementedConvertingFunction;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ColumnMapping;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ColumnReader;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ResultSetColumnMetadata;
 import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.InvocationTargetException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 
-public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> {
-
-    private final ClassTableSchema<T> schema;
-    private final ColumnMapping<FieldTableColumn>[] readers;
-    private final Constructor<T> constructor;
-    public DefaultClassConvertingFunction(@NotNull ClassTableSchema<T> schema) {
-        this.schema = schema;
+public class DefaultObjectBuilder<T> extends ImplementedConvertingFunction<ClassTableSchema<T>, T, T> {
+    public DefaultObjectBuilder(@NotNull ClassTableSchema<T> schema) {
+        super(schema);
         Class<T> clazz = schema.getEntityClass();
         try {
             constructor = clazz.getDeclaredConstructor();
@@ -43,7 +38,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
                     e
             );
         }
-        readers = new ColumnMapping[schema.getColumns().size()];
+        mappings = new ColumnMapping[schema.getColumns().size()];
 
         int i = 0;
         for (FieldTableColumn c : schema.getColumns()) {
@@ -51,7 +46,7 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
             if (!field.trySetAccessible())
                 throw new IllegalArgumentException("Field " + field.getName() + " is not accessible to DefaultClassConvertingFunction. Ensure proper access or define a explicit converting function.");
 
-            readers[i++] = ColumnMapping.of(
+            mappings[i++] = ColumnMapping.of(
                     c,
                     schema.getName(),
                     ColumnReader.createFor(
@@ -82,11 +77,10 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
     }
 
     public static Object getDefaultValueOnNotPresent(@NotNull TableColumn column, Class<?> clazz, BaseTableSchema<?> schema) throws MissingColumnInResultSetException, IllegalStateException {
-        if (column instanceof FieldTableColumn ftc && !ftc.allowsNotPresent()) {
-            throw new MissingColumnInResultSetException(
-                    "Column '" + column.getName() + " of " + schema.getName() + "' was not found in the result set"
-            );
-        }
+        if (column instanceof FieldTableColumn ftc && !ftc.allowsNotPresent())
+            throw new MissingColumnInResultSetException(column, schema);
+        else if (!column.hasDefaultValue())
+            throw new MissingColumnInResultSetException(column, schema, true);
 
         Object value = column.getDefaultValue().getValue();
 
@@ -104,34 +98,16 @@ public class DefaultClassConvertingFunction<T> implements ConvertingFunction<T> 
         return value;
     }
 
+
     @Override
-    public T apply(@NotNull ResultSet rs, ResultSetMap map) throws SQLException {
-        try {
-            T t = constructor.newInstance();
+    protected T createBase() throws Exception { return constructor.newInstance(); }
 
-            for (ColumnMapping<FieldTableColumn> mapping : readers) {
-                FieldTableColumn column = mapping.column();
-                String name = column.getName();
+    @Override
+    protected void applyToBase(T t, int index, TableColumn column, ResultSetColumnMetadata meta, Object value) throws IllegalAccessException {
+        ((FieldTableColumn) column).getField().set(t, value);
+    }
 
-                ResultSetColumnMetadata meta = map.getQualified(name, mapping.qualifiedName());
+    @Override
+    protected T buildObject(T t) { return t; }
 
-                if (meta != null) {
-                    column.getField().set(t, mapping.reader().read(rs, meta));
-                } else if (column.hasDefaultValue()) {
-                    column.getField().set(t, getDefaultValueOnNotPresent(column, mapping.clazz(), schema));
-                }
-            }
-
-            return t;
-        } catch (InvocationTargetException e) {
-            throw new IllegalStateException(
-                    "Constructor " + constructor + " threw an exception.",
-                    e.getCause()
-            );
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new IllegalStateException(
-                    "Could not instantiate using constructor " + constructor,
-                    e
-            );
-        }
-    }}
+}

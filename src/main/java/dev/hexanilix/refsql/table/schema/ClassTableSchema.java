@@ -10,8 +10,8 @@ import dev.hexanilix.refsql.table.annotations.PrimaryKey;
 import dev.hexanilix.refsql.table.annotations.SchemaIgnore;
 import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.column.TableColumn;
-import dev.hexanilix.refsql.table.schema.middleware.DefaultClassConvertingFunction;
-import dev.hexanilix.refsql.table.schema.middleware.RecordClassConverter;
+import dev.hexanilix.refsql.table.schema.middleware.DefaultObjectBuilder;
+import dev.hexanilix.refsql.table.schema.middleware.RecordObjectBuilder;
 import dev.hexanilix.text.style.Cases;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -316,8 +316,8 @@ public class ClassTableSchema<T> extends BaseTableSchema<FieldTableColumn> {
     public static <T> @NotNull ConvertingFunction<T> buildConvertingFunction(@NotNull ClassTableSchema<T> schema) {
         Class<T> clazz = schema.clazz;
         if (clazz.isRecord())
-            return (ConvertingFunction<T>) new RecordClassConverter<>((ClassTableSchema<? extends Record>) schema);
-        return new DefaultClassConvertingFunction<>(schema);
+            return (ConvertingFunction<T>) new RecordObjectBuilder<>((ClassTableSchema<? extends Record>) schema);
+        return new DefaultObjectBuilder<>(schema);
     }
 
     public void setConvertingFunction(ConvertingFunction<T> func) {

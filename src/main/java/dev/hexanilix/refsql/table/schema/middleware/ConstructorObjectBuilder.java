@@ -1,11 +1,13 @@
 package dev.hexanilix.refsql.table.schema.middleware;
 
 import dev.hexanilix.reflection.constructors.references.*;
-import dev.hexanilix.refsql.ConvertingFunction;
 import dev.hexanilix.refsql.table.schema.BaseTableSchema;
 import dev.hexanilix.refsql.table.schema.ClassTableSchema;
 import dev.hexanilix.refsql.table.schema.column.FieldTableColumn;
 import dev.hexanilix.refsql.table.schema.column.TableColumn;
+import dev.hexanilix.refsql.table.schema.middleware.base.ConstructorImplementedConvertingFunction;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ColumnMapping;
+import dev.hexanilix.refsql.table.schema.middleware.mapping.ColumnReader;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
@@ -13,18 +15,15 @@ import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
+public class ConstructorObjectBuilder<T> extends ConstructorImplementedConvertingFunction<BaseTableSchema<?>, T> {
 
     private static @NotNull Constructor<?> extractConstructor(@NotNull Serializable reference) {
         try {
@@ -69,18 +68,13 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
 
     private static final Pattern JAVA_COMPILER_ARG_REGEX = Pattern.compile("^arg\\d+$");
 
-    private final BaseTableSchema<?> schema;
-    private final ColumnMapping<?>[] mappings;
-    private final Constructor<T> constructor;
-
-    public ConstructorClassConverter(
+    public ConstructorObjectBuilder(
             @NotNull BaseTableSchema<?> schema,
             @NotNull Class<T> clazz,
             @NotNull Constructor<T> constructor,
             @NotNull List<String> column_names
     ) {
-        this.schema = schema;
-        this.constructor = constructor;
+        super(schema, constructor);
         this.constructor.trySetAccessible();
 
         if (!constructor.getDeclaringClass().equals(clazz))
@@ -128,7 +122,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
         }
     }
 
-    public ConstructorClassConverter(
+    public ConstructorObjectBuilder(
             @NotNull BaseTableSchema<?> schema,
             @NotNull Class<T> clazz,
             @NotNull Constructor<T> constructor
@@ -144,7 +138,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
         );
     }
 
-    public ConstructorClassConverter(
+    public ConstructorObjectBuilder(
             @NotNull BaseTableSchema<?> schema,
             @NotNull Constructor<T> constructor
     ) {
@@ -159,7 +153,7 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
         );
     }
 
-    public ConstructorClassConverter(
+    public ConstructorObjectBuilder(
             @NotNull ClassTableSchema<T> schema,
             @NotNull Class<?>[] parameterTypes,
             @NotNull List<String> column_names
@@ -182,221 +176,188 @@ public class ConstructorClassConverter<T> implements ConvertingFunction<T> {
         }
     }
 
-    @Override
-    public T apply(ResultSet rs, ResultSetMap map) throws SQLException {
-        try {
-            Object[] values = new Object[mappings.length];
-
-            for (int i = 0; i < mappings.length; i++) {
-                ColumnMapping<?> mapping = mappings[i];
-                TableColumn column = mapping.column();
-
-                ResultSetColumnMetadata meta =
-                        map.getQualified(column.getName(), mapping.qualifiedName());
-
-                if (meta != null) {
-                    values[i] = mapping.reader().read(rs, meta);
-                }
-            }
-
-            return constructor.newInstance(values);
-
-        } catch (InvocationTargetException e) {
-            throw new IllegalStateException(
-                    "Constructor " + constructor + " threw an exception.",
-                    e.getCause()
-            );
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new IllegalStateException(
-                    "Could not instantiate using constructor " + constructor,
-                    e
-            );
-        }
-    }
-
-
     // Constructor reference builders
-    public ConstructorClassConverter(
+    public ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor0<T> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor1<T, A1> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor2<T, A1, A2> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor3<T, A1, A2, A3> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor4<T, A1, A2, A3, A4> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor5<T, A1, A2, A3, A4, A5> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor6<T, A1, A2, A3, A4, A5, A6> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor7<T, A1, A2, A3, A4, A5, A6, A7> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor8<T, A1, A2, A3, A4, A5, A6, A7, A8> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor9<T, A1, A2, A3, A4, A5, A6, A7, A8, A9> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor10<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor11<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor12<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor13<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor14<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor15<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor16<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor17<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor18<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor19<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor20<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor21<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor22<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor23<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor24<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor25<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor26<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor27<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor28<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28, A29>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor29<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28, A29> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
 
     public <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28, A29, A30>
-    ConstructorClassConverter(
+    ConstructorObjectBuilder(
             BaseTableSchema<?> schema,
             Constructor30<T, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22, A23, A24, A25, A26, A27, A28, A29, A30> reference
     ) { this(schema, (Constructor<T>) extractConstructor(reference)); }
